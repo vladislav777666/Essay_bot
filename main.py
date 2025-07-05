@@ -1,6 +1,7 @@
 import asyncio
 import aiohttp
 import logging
+from aiohttp import web
 
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.types import Message, KeyboardButton, ReplyKeyboardMarkup
@@ -12,10 +13,10 @@ from aiogram.fsm.storage.memory import MemoryStorage
 # === 🔐 КОНФИГ ===
 API_TOKEN = '8101812893:AAEXynon2ogqCX7SCbpZUpld4nAz2GKxUhA'
 SUPABASE_URL = "https://wmslejierapwdicnresb.supabase.co"
-SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indtc2xlamllcmFwd2RpY25yZXNiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MTU2NzA3MSwiZXhwIjoyMDY3MTQzMDcxfQ.Zl00tGef-n-F3PZNdnYaugEvbaVL2yXfs-xvIF2nWjU"
+SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 GEMINI_API_KEY = "AIzaSyBeU-4qbh71GbLchWE3-sTGJ72oLJMs7e0"
 
-# === 📚 БИБЛИОТЕКИ ===
+# === 📚 ИНИЦИАЛИЗАЦИЯ ===
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 router = Router()
@@ -55,24 +56,19 @@ async def gemini_query(prompt: str) -> str:
             data = await resp.json()
             return data["candidates"][0]["content"]["parts"][0]["text"]
 
-# === Команда /start ===
+# === Обработчики ===
 @router.message(Command("start"))
 async def start_handler(message: Message):
     await message.answer("👋 Привет! Я помогу тебе поступить в вуз мечты.", reply_markup=main_menu)
 
-# === Тех. поддержка ===
 @router.message(F.text == "⚠️ Тех. Поддержка")
 async def tech_support(message: Message):
     await message.answer("📞 Тех. поддержка: https://t.me/Geniys666")
 
-# === Премиум ===
 @router.message(F.text == "👑 Премиум")
 async def premium_handler(message: Message):
-    await message.answer(
-        f"💸 Оплатите 2000₸ на Kaspi:\n🔢 4400 4303 8721 0856\n📝 Комментарий: {message.from_user.id}"
-    )
+    await message.answer(f"💸 Оплатите 2000₸ на Kaspi:\n🔢 4400 4303 8721 0856\n📝 Комментарий: {message.from_user.id}")
 
-# === Анализ эссе ===
 @router.message(F.text == "🧐 Анализ Эссе")
 async def essay_analysis_start(message: Message, state: FSMContext):
     await message.answer("✍️ Отправь тип и текст эссе.")
@@ -82,18 +78,7 @@ async def essay_analysis_start(message: Message, state: FSMContext):
 async def essay_analysis_process(message: Message, state: FSMContext):
     await state.clear()
     prompt = f"""
-Проанализируй моё эссе.
-
-Не используй вступительных или конечных сообщений, приступи сразу к делу. Не используй разные виды форматирования. Разделяй абзацы двумя строками.
-
-Дай честный анализ:
-• Hook Strength
-• Readability
-• Coherence
-• Logical Flow
-• Emotional Resonance
-
-Ошибки и как их исправить. В конце — общие советы.
+Проанализируй моё эссе. Не используй вступления и форматирования.
 
 Эссе:
 {message.text}
@@ -101,7 +86,6 @@ async def essay_analysis_process(message: Message, state: FSMContext):
     result = await gemini_query(prompt)
     await message.answer(result[:4096])
 
-# === Написание эссе ===
 @router.message(F.text == "🪶 Написание Эссе")
 async def essay_write_start(message: Message, state: FSMContext):
     await message.answer("📜 Расскажи о себе: история, цели, увлечения")
@@ -111,18 +95,13 @@ async def essay_write_start(message: Message, state: FSMContext):
 async def essay_write_process(message: Message, state: FSMContext):
     await state.clear()
     prompt = f"""
-Вот вся информация обо мне: {message.text}
+Вот информация обо мне: {message.text}
 
 Создай лучшее эссе для Common App.
-💪 Сильные стороны
-🪝 Hook идеи
-🧐 Темы
-✍️ Примеры эссе (650 слов)
 """
     result = await gemini_query(prompt)
     await message.answer(result[:4096])
 
-# === Анализ активностей ===
 @router.message(F.text == "💼 Оценка Активностей")
 async def activity_analysis_start(message: Message, state: FSMContext):
     await message.answer("📋 Отправь Extracurriculars и Honors")
@@ -132,15 +111,13 @@ async def activity_analysis_start(message: Message, state: FSMContext):
 async def activity_analysis_process(message: Message, state: FSMContext):
     await state.clear()
     prompt = f"""
-Проанализируй активности (Extracurriculars & Honors).
-Дай рекомендации, замени слабые формулировки, предложи улучшения.
+Проанализируй активности. Дай советы.
 
 {message.text}
 """
     result = await gemini_query(prompt)
     await message.answer(result[:4096])
 
-# === Создание активностей ===
 @router.message(F.text == "📋 Создание Активностей")
 async def activity_create_start(message: Message, state: FSMContext):
     await message.answer("📝 Напиши: класс, год выпуска, факультет, страна и интересы")
@@ -150,11 +127,7 @@ async def activity_create_start(message: Message, state: FSMContext):
 async def activity_create_process(message: Message, state: FSMContext):
     await state.clear()
     prompt = f"""
-На основе информации создай 10 мощных Extracurricular Activities:
-- Название
-- Тип
-- Краткое описание
-- Как усиливает заявку
+Создай 10 Extracurricular Activities.
 
 Инфо:
 {message.text}
@@ -162,7 +135,27 @@ async def activity_create_process(message: Message, state: FSMContext):
     result = await gemini_query(prompt)
     await message.answer(result[:4096])
 
-# === Запуск ===
+# === HTTP-сервер ===
+async def handle_healthz(request):
+    return web.Response(text="OK")
+
+async def start_web_app():
+    app = web.Application()
+    app.router.add_get("/healthz", handle_healthz)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", 8080)
+    await site.start()
+    print("🌐 HTTP server started on http://0.0.0.0:8080")
+
+# === ГЛАВНЫЙ ЗАПУСК ===
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    asyncio.run(dp.start_polling(bot))
+
+    async def main():
+        await asyncio.gather(
+            dp.start_polling(bot),
+            start_web_app()
+        )
+
+    asyncio.run(main())
