@@ -7,6 +7,5 @@ services:
     startCommand: python main.py
     autoDeploy: true
     build:
-  environment:
-    PYTHON_VERSION: 3.11
-
+      environment:
+        PYTHON_VERSION: 3.11
