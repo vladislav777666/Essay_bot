@@ -26,7 +26,7 @@ SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 GEMINI_API_KEY = "AIzaSyBeU-4qbh71GbLchWE3-sTGJ72oLJMs7e0"
 AI_CHANNEL_ID = '-1002849785592'
 WEBHOOK_PATH = "/webhook"
-WEBHOOK_URL = "https://your-app-name.onrender.com/webhook"  # ЗАМЕНИ НА СВОЙ ДОМЕН!
+WEBHOOK_URL = "https://essay-bot.onrender.com"
 
 # === Supabase и Telegram Init ===
 def init_supabase():
