@@ -27,25 +27,20 @@ AI_CHANNEL_ID = '-1002849785592'
 # === Исправленная инициализация Supabase ===
 def init_supabase():
     import os
-    # Очищаем переменные окружения, которые могут вызывать конфликт
+    from supabase import create_client
+    from supabase.lib.client_options import ClientOptions
+
+    # Очистка переменных окружения (если надо)
     os.environ.pop('HTTP_PROXY', None)
     os.environ.pop('HTTPS_PROXY', None)
-    os.environ.pop('http_proxy', None)
-    os.environ.pop('https_proxy', None)
-    
-    return create_client(
-        SUPABASE_URL,
-        SUPABASE_API_KEY,
-        options={
-            'auto_refresh_token': False,
-            'persist_session': False,
-            'client_options': {
-                'headers': {
-                    'Authorization': f'Bearer {SUPABASE_API_KEY}'
-                }
-            }
-        }
+
+    client_options = ClientOptions(
+        schema="public",
+        auto_refresh_token=False,
+        persist_session=False
     )
+
+    return create_client(SUPABASE_URL, SUPABASE_API_KEY, options=client_options)
 
 supabase: Client = init_supabase()
 bot = Bot(token=API_TOKEN)
