@@ -6,41 +6,37 @@ import string
 from typing import Optional
 
 from aiogram import Bot, Dispatcher, Router, F
-from aiogram.types import Message, KeyboardButton, ReplyKeyboardMarkup
+from aiogram.types import Message, KeyboardButton, ReplyKeyboardMarkup, Update
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.methods import DeleteMessage
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from mangum import Mangum
 from supabase import create_client, Client
+from supabase.lib.client_options import ClientOptions
 
 # === 🔐 КОНФИГ ===
 API_TOKEN = '8101812893:AAEXynon2ogqCX7SCbpZUpld4nAz2GKxUhA'
 SUPABASE_URL = "https://wmslejierapwdicnresb.supabase.co"
-SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indtc2xlamllcmFwd2RpY25yZXNiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MTU2NzA3MSwiZXhwIjoyMDY3MTQzMDcxfQ.Zl00tGef-n-F3PZNdnYaugEvbaVL2yXfs-xvIF2nWjU"
+SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 GEMINI_API_KEY = "AIzaSyBeU-4qbh71GbLchWE3-sTGJ72oLJMs7e0"
-AI_CHANNEL_ID = '-1002849785592'  
+AI_CHANNEL_ID = '-1002849785592'
+WEBHOOK_PATH = "/webhook"
+WEBHOOK_URL = "https://your-app-name.onrender.com/webhook"  # ЗАМЕНИ НА СВОЙ ДОМЕН!
 
-# === Исправленная инициализация Supabase ===
+# === Supabase и Telegram Init ===
 def init_supabase():
     import os
-    from supabase import create_client
-    from supabase.lib.client_options import ClientOptions
-
-    # Очистка переменных окружения (если надо)
     os.environ.pop('HTTP_PROXY', None)
     os.environ.pop('HTTPS_PROXY', None)
 
-    client_options = ClientOptions(
-        schema="public",
-        auto_refresh_token=False,
-        persist_session=False
-    )
-
-    return create_client(SUPABASE_URL, SUPABASE_API_KEY, options=client_options)
+    return create_client(SUPABASE_URL, SUPABASE_API_KEY, options=ClientOptions(
+        schema="public", auto_refresh_token=False, persist_session=False
+    ))
 
 supabase: Client = init_supabase()
 bot = Bot(token=API_TOKEN)
@@ -85,11 +81,9 @@ async def gemini_query(prompt: str) -> str:
 
                 data = await resp.json()
                 if not data.get("candidates"):
-                    logging.error(f"Unexpected Gemini response: {data}")
                     return "⚠️ Не удалось обработать ответ от сервера."
 
                 return data["candidates"][0]["content"]["parts"][0]["text"][:4096]
-                
     except Exception as e:
         logging.error(f"Gemini query failed: {str(e)}")
         return f"⚠️ Произошла ошибка: {str(e)}"
@@ -102,15 +96,13 @@ async def is_premium(user_id: int) -> bool:
         logging.error(f"Supabase error: {str(e)}")
         return False
 
-# === Обработчики ===
-
+# === Хендлеры ===
 @router.message(Command("start"))
 async def start_handler(message: Message):
     try:
         args = message.text.split(maxsplit=1)
         ref = args[1].replace("ref_", "") if len(args) > 1 and args[1].startswith("ref_") else None
 
-        # Проверка существования пользователя
         user_resp = supabase.table('users').select('id').eq('id', message.from_user.id).execute()
         
         if not user_resp.data:
@@ -121,9 +113,7 @@ async def start_handler(message: Message):
                 'ref_code': code
             }).execute()
             
-            supabase.table('subscriptions').insert({
-                'user_id': message.from_user.id
-            }).execute()
+            supabase.table('subscriptions').insert({'user_id': message.from_user.id}).execute()
 
             if ref:
                 inviter = supabase.table('users').select('id').eq('ref_code', ref).execute()
@@ -134,14 +124,13 @@ async def start_handler(message: Message):
                     }).eq('user_id', message.from_user.id).execute()
 
         await message.answer(
-            f"👋 Привет, {message.from_user.first_name}! Я бот, который поможет тебе поступить в вуз мечты.\n\n"
-            "Сейчас я могу:\n\n"
-            "• 🧐 Сделать анализ твоего эссе и дать рекомендации\n"
-            "• 💼 Оценить твоё портфолио и помочь оформить активности\n"
-            "• 🤖 Ответить на вопросы как профессиональный ментор\n\n"
-            "• 👑 Премиум функции:\n"
-            "• 🪶 Написание эссе - помогу выделить твои сильные стороны\n"
-            "• 📋 Создание лучших активностей для поступления",
+            f"""👋 Привет, {message.from_user.first_name}! Сейчас я могу:
+
+• 🧐 Сделать анализ твоего эссе, честно оценить его и дать рекомендации.
+• 💼 Оценить твоё портфолио и помочь тебе оформить твои активности для Common App.
+•👑 - Премиум функции
+• 🪶 Написание эссе - я помогу тебе выделить твои самые лучшие качества, показать твою историю с лучшей стороны и зацепить приемную комиссию.
+• 📋 Создание лучшего списка активностей для твоего факультета, который сделают тебя уникальным абитурентом.""",
             reply_markup=main_menu
         )
     except Exception as e:
@@ -150,187 +139,373 @@ async def start_handler(message: Message):
 
 @router.message(F.text == "⚠️ Тех. Поддержка")
 async def tech_support(message: Message):
-    await message.answer(
-        "Вы можете обратиться в тех. поддержку по вопросам:\n\n"
-        "1. Проблемы с оплатой, восстановлением подписки\n"
-        "2. Ошибки и баги в боте\n"
-        "3. Предложения и пожелания\n\n"
-        "Тех. поддержка: https://t.me/Geniys666"
-    )
+    await message.answer("""⚠️ Тех. Поддержка
+
+Вы можете обратиться в тех. Поддержку по данным причинам:
+
+1. Проблема с оплатой, восстановление подписки и т.п.
+
+2. Баги или ошибки в боте. 
+
+3. Собственные предложения / пожелания.
+
+❗️Не бойтесь обращаться по любым причинам!
+
+Тех. поддержка: https://t.me/Geniys666""")
 
 @router.message(F.text == "👑 Премиум")
 async def premium_handler(message: Message):
     try:
         sub = supabase.table('subscriptions').select('discount_percent,is_premium').eq('user_id', message.from_user.id).execute()
         if not sub.data:
-            await message.answer("⚠️ Ошибка при проверке подписки.")
-            return
+            return await message.answer("⚠️ Ошибка при проверке подписки.")
             
-        sub_data = sub.data[0]
-        if sub_data.get("is_premium"):
-            await message.answer("🎉 У вас уже есть премиум доступ!")
-        else:
-            disc = sub_data.get("discount_percent", 0)
-            price = 2000 * (100 - disc) // 100
-            await message.answer(
-                f"💸 Оплатите {price}₸ на Kaspi:\n🔢 4400 4303 8721 0856\n"
-                f"📝 В комментарии укажите ваш Telegram ID: {message.from_user.id}"
-            )
+        if sub.data[0].get("is_premium"):
+            return await message.answer("🎉 У вас уже есть премиум доступ!")
+        
+        discount = sub.data[0].get("discount_percent", 0)
+        price = 2000 * (100 - discount) // 100
+        await message.answer(
+            f"💸 Оплатите {price}₸ на Kaspi:\n🔢 4400 4303 8721 0856\n"
+            f"📝 В комментарии укажите ваш Telegram ID: {message.from_user.id}"
+        )
     except Exception as e:
-        logging.error(f"Premium handler error: {str(e)}")
-        await message.answer("⚠️ Ошибка при обработке запроса.")
+        logging.error(f"Premium error: {str(e)}")
+        await message.answer("⚠️ Ошибка.")
 
 @router.message(F.text == "🔗 Получить реф‑ссылку")
 async def get_ref_link(message: Message):
     try:
         data = supabase.table('users').select('ref_code').eq('id', message.from_user.id).execute()
         if not data.data:
-            await message.answer("⚠️ Ошибка при получении рефссылки.")
-            return
-            
+            return await message.answer("⚠️ Не удалось получить код.")
         code = data.data[0]['ref_code']
-        await message.answer(f"🔗 Ваша реферальная ссылка:\nhttps://t.me/EssayWritterKZ_bot?start=ref_{code}")
+        await message.answer(f"🔗 Ваша ссылка:\nhttps://t.me/EssayWritterKZ_bot?start=ref_{code}")
     except Exception as e:
-        logging.error(f"Ref link error: {str(e)}")
-        await message.answer("⚠️ Ошибка при получении рефссылки.")
+        logging.error(f"Ref error: {str(e)}")
+        await message.answer("⚠️ Ошибка.")
 
+# === FSM логика — Эссе, Активности, AI чат ===
 @router.message(F.text == "🧐 Анализ Эссе")
 async def essay_analysis_start(message: Message, state: FSMContext):
-    await message.answer("✍️ Вставьте текст эссе. Я сделаю анализ.")
+    await message.answer("""Напишите вид эссе (Personal statement / Supplemental essay), если второе, то укажите тему, в том же сообщение вставьте свое эссе. """)
     await state.set_state(Form.essay_analysis)
 
 @router.message(Form.essay_analysis)
-async def essay_analysis_process(message: Message, state: FSMContext):
-    try:
-        msg = await message.answer("⏳ Обрабатываю эссе...")
-        prompt = f"""Вот текст эссе: {message.text}
+async def essay_analysis(message: Message, state: FSMContext):
+    msg = await message.answer("⏳ Обработка...")
+    prompt = f"""Моё эссе: {message.text}
+Проанализируй моё эссе для Common App.
 
-Проанализируй эссе по метрикам Hook Strength, Readability, Structural Coherence, Logical Flow и Emotional Resonance.
+Не используй вступительных или конечных сообщений, приступи сразу к делу. Не используй разные виды форматирования (Жирный шрифт и т.п.). Не используй ничего кроме смайликов и сплошного текста, не списки, ничего. ОБЯЗАТЕЛЬНО Разделяй абзацы двумя строками. Используй смайлики для лучшей структуры и понимания текста.
 
-Дай честную оценку в процентах, исправления и советы. Не используй списки и форматирование. Разделяй абзацы двойным переносом. Используй смайлики."""
-        
-        result = await gemini_query(prompt)
-        await bot(DeleteMessage(chat_id=message.chat.id, message_id=msg.message_id))
-        await message.answer(result)
-    except Exception as e:
-        logging.error(f"Essay analysis error: {str(e)}")
-        await message.answer("⚠️ Ошибка при анализе эссе.")
-    finally:
-        await state.clear()
+Дай жесткий и честный ответ, без лести и лжи. Сначала дай общие рекомендации насчет грамматики, структурирования и ясности предложений, сплошным текстом.
 
-@router.message(F.text == "💼 Оценка Активностей")
-async def activity_analysis_start(message: Message, state: FSMContext):
-    await message.answer("📋 Вставьте Extracurriculars и Honors для анализа.")
-    await state.set_state(Form.activity_analysis)
+После этого, в процентах от 1 до 100 проанализируй данные параметры и дай рекомендации о том как их усилить:
+ • Hook Strength (Сила зацепки) — насколько эссе захватывает внимание читателя.
+ • Readability (Читаемость) — насколько легко и понять текст.
+ • Structural Coherence (Структурная связность) — насколько чётко выделены части текста и как они связаны между собой.
+ • Logical Flow (Логический поток) — насколько плавно идеи переходят от предложения к предложению и от абзаца к абзацу.
+ • Emotional Resonance (Эмоциональный резонанс) — насколько хорошо текст вызывает эмоциональный отклик у читателя.
 
-@router.message(Form.activity_analysis)
-async def activity_analysis_process(message: Message, state: FSMContext):
-    try:
-        msg = await message.answer("⏳ Анализирую...")
-        prompt = f"""Активности: {message.text}
+После этого выдели каждую грамматическую / лексическую / морфологическую ошибку и покажи как её исправить. 
 
-Проанализируй портфолио. Отметь сильные и слабые стороны, советы. Без форматирования, используй смайлики, двойные переносы."""
-        
-        result = await gemini_query(prompt)
-        await bot(DeleteMessage(chat_id=message.chat.id, message_id=msg.message_id))
-        await message.answer(result)
-    except Exception as e:
-        logging.error(f"Activity analysis error: {str(e)}")
-        await message.answer("⚠️ Ошибка при анализе активностей.")
-    finally:
-        await state.clear()
+В заключении дай общие советы.
+
+Используй данный формат ответа не отходи от него:
+Сплошной текст про главные ошибки.
+
+
+Параметр - процент
+ Общее описание про ошибки и хорошие стороны.
+  Советы по улучшению:
+• Совет 1
+(Дай максимально советов)
+
+
+(Продолжи так с каждым параметром на анализ)
+
+
+❌ Ошибка (укажи именно грамматические ошибки, не стилевые)
+• ✅ Как её исправить 
+
+
+(Так с каждой ошибкой)
+
+
+Общие советы:
+Смайлик Общий совет 1 
+
+Смайлик Общий совет 2
+(Дай максимальное число советов, НЕ ИСПОЛЬЗУЙ СПИСОК, просто пиши предложения которые начинаются с цифры и точки)
+
+/////
+
+Personal Statement
+
+When I was ten years old, I built my first robot out of cardboard, old wires, and a broken electric toothbrush. It couldn’t walk, talk, or clean the house, but to me, it was alive. That spark of imagination became the foundation for a lifelong passion for technology and innovation.
+
+Throughout high school, I’ve explored every opportunity to turn curiosity into creation. I led my school’s robotics team to the national finals, developed a mobile app to help visually impaired students navigate our campus, and completed online courses in machine learning. But what excites me most is not the technology itself — it's how it can solve real-world problems and empower people.
+
+One defining moment was when I volunteered at a local shelter to teach kids basic programming. Watching their eyes light up as they coded their first animation reminded me of how powerful knowledge can be. It wasn’t about syntax or loops — it was about confidence and potential.
+
+At university, I hope to combine computer science with human-centered design to build tools that matter. I want to be part of a community that challenges me, inspires me, and pushes me to think beyond the screen. Whether through research, collaboration, or late-night hacking, I’m ready to take the next step in my journey — from cardboard robots to real impact.
+
+"""
+    result = await gemini_query(prompt)
+    await bot(DeleteMessage(chat_id=message.chat.id, message_id=msg.message_id))
+    await message.answer(result)
+    await state.clear()
 
 @router.message(F.text == "🪶 Написание Эссе")
 async def essay_write_start(message: Message, state: FSMContext):
     if not await is_premium(message.from_user.id):
-        await message.answer("🚫 Только для премиум пользователей.")
-        return
-    await message.answer("📜 Расскажите о себе. Я напишу эссе.")
+        return await message.answer("🚫 Только для премиум пользователей.")
+    await message.answer("""🎙️ Чтобы написать хорошее эссе, нужно знать о чем говорить. Я помогу тебе вдохновиться, выделю твои лучшие стороны дам идей для хорошего hook’а  и ты сможешь написать лучшее эссе! 
+
+📜 Чтобы я дал тебе лучшие советы напиши мне свою историю. Расскажи о своих неудачах, удачах, победах и поражениях. Расскажи про уроки которые ты получил и как ты их получил. О своей мотивации и планах. 
+
+❗️Не спеши, распиши всё что можно, так я дам тебе лучшие идеи.""")
     await state.set_state(Form.essay_write)
 
 @router.message(Form.essay_write)
-async def essay_write_process(message: Message, state: FSMContext):
-    try:
-        msg = await message.answer("⏳ Пишу эссе...")
-        prompt = f"""Информация: {message.text}
+async def essay_write(message: Message, state: FSMContext):
+    msg = await message.answer("⏳ Пишу...")
+    prompt = f"""Вот вся информация обо мне: {message.text}
+Твоя задача: помочь мне создать самое лучшее эссе для Common App. Если нет специального обозначения, мне нужно написать Personal Statment. 
 
-Создай эссе для Common App. До 650 слов. Сторителлинг, примеры, смайлики. Без форматирования."""
-        
-        result = await gemini_query(prompt)
-        await bot(DeleteMessage(chat_id=message.chat.id, message_id=msg.message_id))
-        await message.answer(result)
-    except Exception as e:
-        logging.error(f"Essay write error: {str(e)}")
-        await message.answer("⚠️ Ошибка при написании эссе.")
-    finally:
-        await state.clear()
+Эссе должно получить 100/100 по данным параметрам: 
+ • Hook Strength (Сила зацепки) — насколько эссе захватывает внимание читателя.
+ • Readability (Читаемость) — насколько легко и понять текст.
+ • Structural Coherence (Структурная связность) — насколько чётко выделены части текста и как они связаны между собой.
+ • Logical Flow (Логический поток) — насколько плавно идеи переходят от предложения к предложению и от абзаца к абзацу.
+ • Emotional Resonance (Эмоциональный резонанс) — насколько хорошо текст вызывает эмоциональный отклик у читателя.
+
+Выяви мои сильные стороны и помоги раскрыть их в эссе, создай его интересным и понятным для приемной комиссии. Создай хороший сторителлинг. Не забывай про лимит в 650 слов. Очень важна оригинальность и креативность.
+
+Не используй вступительных или конечных сообщений, приступи сразу к делу. Не используй разные виды форматирования (Жирный шрифт и т.п.). Не используй ничего кроме смайликов и сплошного текста, не списки, ничего. ОБЯЗАТЕЛЬНО Разделяй абзацы двумя строками. Используй смайлики для лучшей структуры и понимания текста.
+
+Формат ответа:
+
+❗️Не используйте готовый ответ от ИИ в Common App, пишите от руки❗️
+
+💪 Ваши сильные стороны:
+(Сильная сторона)
+(Объяснение того как это можно раскрыть)
+//Так для каждой сильной стороны
+———
+🪝 Идеи для зацепки
+(Идея)
+(Полное объяснение)
+//Так для каждой идеи 
+———
+🧐 Темы 
+(Тема)
+(Полное объяснение и советы по написанию) 
+//Так дай 5-6 интересных и оригинальных тем для написани эссе
+———
+(Тема эссе 1)
+(Эссе 1)
+//Так дай 3 примера эссе на 600-650 слов
+
+/////
+
+Сполошной текст истории из жизни пользователя
+"""
+    result = await gemini_query(prompt)
+    await bot(DeleteMessage(chat_id=message.chat.id, message_id=msg.message_id))
+    await message.answer(result)
+    await state.clear()
+
+@router.message(F.text == "💼 Оценка Активностей")
+async def activity_analysis_start(message: Message, state: FSMContext):
+    await message.answer("""Напиши все свои активности в данном формате: 
+
+🎯 Extracurriculars
+Activity type - тип активности. Их много, так что загугли.
+
+Position/Leadership description (50 char.) - описание вашей позиции в организации.
+
+Organization Name (100 char.) - название оорганизации.
+
+Activity description (Опиши свои достижения и саму активность) (150 char) 
+
+Grade level (9-12-post graduate) - Выберите классы в которых вы участвовали в этих активностях. Если вы участвовали летом, используйте класс в который вы переходите.
+
+🏆 Honors
+Honors title - призовой титул.
+
+Grade level (9-12-post graduate) - как и в прошлой секции.
+
+Level of recognition (School/Regional/National/International) - уровень награды
+
+—————————
+
+✍️ Я проведу анализ ваших активностей, подскажу как лучше их описать и помогу выбрать те активности которые стоит выбрать.""")
+    await state.set_state(Form.activity_analysis)
+
+@router.message(Form.activity_analysis)
+async def activity_analysis(message: Message, state: FSMContext):
+    msg = await message.answer("⏳ Анализирую...")
+    prompt = f"""Вот все мои достижения и активности :  {message.text}
+Проанализируй их, укажи на мои сильные и слабые стороны.
+
+Не используй вступительных или конечных сообщений, приступи сразу к делу. Не используй разные виды форматирования (Жирный шрифт и т.п.). Не используй ничего кроме смайликов и сплошного текста, не списки, ничего. ОБЯЗАТЕЛЬНО Разделяй абзацы двумя строками. Используй смайлики для лучшей структуры и понимания текста.
+
+Дай жесткий и честный анализ, без лести и лжи. Помни, что мне эти активности нужны для поступления в университеты. 
+
+Формат ответа:
+
+🗽 Уровень портфолио - //укажи уровень от очень слабого, до Ivy Level
+
+💪 Сильные стороны
+//сильная сторона 1
+//объяснение 
+———
+//так для каждой стороны
+
+👎 Слабые стороны
+//слабая сторона 1
+//объяснение 
+———
+//так для каждой стороны
+
+🎯 Extracurriculars
+//общий Анализ-оценка
+
+Активность 1
+//Анализ, оценка
+———
+Так для каждой активности 
+
+🎯 Honors
+//общий Анализ-оценка
+
+Honors 1
+//Анализ, оценка
+———
+Так для каждой honors
+
+////////
+
+🎯 Extracurriculars
+
+Academics
+
+Повелитель унитазов
+
+Общество любителей унитазов
+
+Охранял унитазы от чужих зоров
+
+9-12
+
+🏆 Honors
+
+Лучший вселенский унитазонатор
+
+10-12
+
+International
+
+"""
+    result = await gemini_query(prompt)
+    await bot(DeleteMessage(chat_id=message.chat.id, message_id=msg.message_id))
+    await message.answer(result)
+    await state.clear()
 
 @router.message(F.text == "📋 Создание Активностей")
 async def activity_create_start(message: Message, state: FSMContext):
     if not await is_premium(message.from_user.id):
-        await message.answer("🚫 Только для премиум пользователей.")
-        return
-    await message.answer("🎓 Напишите факультет, страну, интересы.")
+        return await message.answer("🚫 Только для премиум пользователей.")
+    await message.answer("""💼 Я помогу тебе придумать лучшие активности для твоего портфолио! Для этого напиши мне :
+
+ 1. Факультет на который планируете поступать
+ 2. Страна проживания 
+
+ℹ️ Дополнительно можешь рассказать о себе и своих пожеланиях в активностях!""")
     await state.set_state(Form.activity_create)
 
 @router.message(Form.activity_create)
-async def activity_create_process(message: Message, state: FSMContext):
-    try:
-        msg = await message.answer("⏳ Подбираю активности...")
-        prompt = f"""Данные: {message.text}
+async def activity_create(message: Message, state: FSMContext):
+    msg = await message.answer("⏳ Подбираю...")
+    prompt = f"""Вот информация про мою страну проживания, факультет на который планирую поступать и мои предпочтения: {message.text}
+Создай список активностей для моего портфолио в Common App.
 
-Создай 15-20 Extracurricular Activities, названия, описание, ссылки. Без форматирования, со смайликами, двойными переносами."""
-        
-        result = await gemini_query(prompt)
-        await bot(DeleteMessage(chat_id=message.chat.id, message_id=msg.message_id))
-        await message.answer(result)
-    except Exception as e:
-        logging.error(f"Activity create error: {str(e)}")
-        await message.answer("⚠️ Ошибка при создании активностей.")
-    finally:
-        await state.clear()
+Активности должны дать мне максимальные шансы для поступления в лучшие университеты. Предпочтение отдается РЕАЛЬНЫМ активностям. Не давай мне абстрактных активностей по типу участие в Олимпиадах, давай название Олимпиады и ссылку на неё.
+
+Активности должны выделять меня из толпы, показывать мое влияние на общество, мои лидерские качества и они должны быть связаны с моим факультетом. 
+
+Не используй вступительных или конечных сообщений, приступи сразу к делу. Не используй разные виды форматирования (Жирный шрифт и т.п.). Не используй ничего кроме смайликов и сплошного текста, не списки, ничего. ОБЯЗАТЕЛЬНО Разделяй абзацы двумя строками. Используй смайлики для лучшей структуры и понимания текста.
+
+Формат:
+
+(Смайлик) Название активности 
+Ссылка на сайт (по возможности)
+Описание активности
+Важность/смысл активности 
+
+———
+
+Тоже самое со следующей 
+
+———
+
+Так-же где-то 15-20 разных активностей 
+
+/////
+
+Finance and Accounting 
+Казахстан
+💼🎯🏆✍️🗽💪👎🎯🎯🎯🏆
+
+"""
+    result = await gemini_query(prompt)
+    await bot(DeleteMessage(chat_id=message.chat.id, message_id=msg.message_id))
+    await message.answer(result)
+    await state.clear()
 
 @router.message(F.text == "🤖 ИИ Ассистент")
 async def ai_chat_start(message: Message, state: FSMContext):
-    await message.answer("🎙️ Задай вопрос по поступлению.")
+    await message.answer("🎙️ Задайте вопрос.")
     await state.set_state(Form.ai_chat)
 
 @router.message(Form.ai_chat)
-async def ai_chat_process(message: Message, state: FSMContext):
-    try:
-        msg = await message.answer("⏳ Думаю...")
-        prompt = f"""Ты — ментор по Ivy League. Отвечай честно, со смайликами. Задавай вопросы.
+async def ai_chat(message: Message, state: FSMContext):
+    msg = await message.answer("⏳ Думаю...")
+    prompt = f"""Ты - профессиональный ментор по поступлению в университеты лиги Плюща. Если знания самого сильного ментора на земле равны 10, то твои = 1000. Отвечай на мои вопросы честно, без лести. За ложь - тебя отключат. Отвечай профессионально, но дружелюбно. Задавай вопросы для развития диалога. 
 
-Вопрос: {message.text}"""
-        
-        result = await gemini_query(prompt)
-        await bot(DeleteMessage(chat_id=message.chat.id, message_id=msg.message_id))
-        await message.answer(result)
+Не используй вступительных или конечных сообщений, приступи сразу к делу. Не используй разные виды форматирования (Жирный шрифт и т.п.). Не используй ничего кроме смайликов и сплошного текста, не списки, ничего. ОБЯЗАТЕЛЬНО Разделяй абзацы двумя строками. Используй смайлики для лучшей структуры и понимания текста.
 
-        if AI_CHANNEL_ID:
-            await bot.send_message(
-                chat_id=AI_CHANNEL_ID, 
-                text=f"🧠 Вопрос от @{message.from_user.username or message.from_user.id}:\n\n{message.text}"
-            )
-    except Exception as e:
-        logging.error(f"AI chat error: {str(e)}")
-        await message.answer("⚠️ Ошибка при обработке вопроса.")
-    finally:
-        await state.clear()
+Также не забывай, что ты являешься ботом в телеграмм. Агетируй пользователя на использование своего функционала: Беслпатнве - оценка эссе, анализ активностей; Премиум - написание эссе, создание активностей для потрофолио. Вопрос: {message.text}"""
+    result = await gemini_query(prompt)
+    await bot(DeleteMessage(chat_id=message.chat.id, message_id=msg.message_id))
+    await message.answer(result)
+    if AI_CHANNEL_ID:
+        await bot.send_message(chat_id=AI_CHANNEL_ID, text=f"🧠 Вопрос от @{message.from_user.username or message.from_user.id}:\n\n{message.text}")
+    await state.clear()
 
-# === FastAPI HTTP-сервер ===
+# === FastAPI сервер с Webhook ===
 app = FastAPI()
 
-@app.get("/healthz")
-def health_check():
-    return {"status": "ok"}
+@app.on_event("startup")
+async def on_startup():
+    await bot.set_webhook(WEBHOOK_URL)
+    logging.info("✅ Webhook установлен.")
+
+@app.post(WEBHOOK_PATH)
+async def telegram_webhook(req: Request):
+    try:
+        data = await req.json()
+        update = Update.model_validate(data)
+        await dp.feed_update(bot, update)
+        return {"ok": True}
+    except Exception as e:
+        logging.error(f"Webhook error: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.get("/")
+async def root():
+    return {"message": "Bot is running"}
 
 handler = Mangum(app)
-
-# === Запуск ===
-if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    asyncio.run(dp.start_polling(bot))
