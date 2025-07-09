@@ -3,6 +3,6 @@ aiohttp==3.9.5
 fastapi==0.111.0
 uvicorn==0.30.1
 python-dotenv==1.0.1
-supabase==2.4.0  # Более новая версия supabase
-httpx>=0.24.0  # Более широкий диапазон
+supabase==2.4.0  # Обновленная версия
+httpx==0.25.2  # Совместимая версия
 mangum==0.17.0
