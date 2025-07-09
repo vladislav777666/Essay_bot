@@ -3,6 +3,6 @@ aiohttp==3.9.5
 fastapi==0.111.0
 uvicorn==0.30.1
 python-dotenv==1.0.1
-supabase==2.3.0  # Конкретно эта версия работает без ошибки proxy
-httpx==0.23.3   # Совместимая версия
+supabase==2.4.0  # Обновленная версия
+httpx==0.24.1   # Совместимая версия для supabase 2.4.0 и fastapi 0.111.0
 mangum==0.17.0
