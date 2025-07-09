@@ -24,8 +24,30 @@ SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSI
 GEMINI_API_KEY = "AIzaSyBeU-4qbh71GbLchWE3-sTGJ72oLJMs7e0"
 AI_CHANNEL_ID = '-1002849785592'  
 
-# === Инициализация ===
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
+# === Исправленная инициализация Supabase ===
+def init_supabase():
+    import os
+    # Очищаем переменные окружения, которые могут вызывать конфликт
+    os.environ.pop('HTTP_PROXY', None)
+    os.environ.pop('HTTPS_PROXY', None)
+    os.environ.pop('http_proxy', None)
+    os.environ.pop('https_proxy', None)
+    
+    return create_client(
+        SUPABASE_URL,
+        SUPABASE_API_KEY,
+        options={
+            'auto_refresh_token': False,
+            'persist_session': False,
+            'client_options': {
+                'headers': {
+                    'Authorization': f'Bearer {SUPABASE_API_KEY}'
+                }
+            }
+        }
+    )
+
+supabase: Client = init_supabase()
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 router = Router()
