@@ -4,6 +4,9 @@ import logging
 import random
 import string
 from typing import Optional
+import logging
+logging.basicConfig(level=logging.INFO)
+
 
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.types import Message, KeyboardButton, ReplyKeyboardMarkup, Update
@@ -13,20 +16,16 @@ from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.methods import DeleteMessage
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 from mangum import Mangum
 from supabase import create_client, Client
 from supabase.lib.client_options import ClientOptions
 
 # === 🔐 КОНФИГ ===
-API_TOKEN = '8101812893:AAEXynon2ogqCX7SCbpZUpld4nAz2GKxUhA'
+API_TOKEN = '8101812893:AAGUsaM5wXA54az8GpoSBi2T6PWglG1d4VU'
 SUPABASE_URL = "https://wmslejierapwdicnresb.supabase.co"
 SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indtc2xlamllcmFwd2RpY25yZXNiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MTU2NzA3MSwiZXhwIjoyMDY3MTQzMDcxfQ.Zl00tGef-n-F3PZNdnYaugEvbaVL2yXfs-xvIF2nWjU"
 GEMINI_API_KEY = "AIzaSyBeU-4qbh71GbLchWE3-sTGJ72oLJMs7e0"
 AI_CHANNEL_ID = '-1002849785592'
-WEBHOOK_PATH = "/webhook"
-WEBHOOK_URL = "https://essay-bot.onrender.com"
 
 # === Supabase и Telegram Init ===
 def init_supabase():
@@ -128,7 +127,7 @@ async def start_handler(message: Message):
 
 • 🧐 Сделать анализ твоего эссе, честно оценить его и дать рекомендации.
 • 💼 Оценить твоё портфолио и помочь тебе оформить твои активности для Common App.
-•👑 - Премиум функции
+• 👑 - Премиум функции
 • 🪶 Написание эссе - я помогу тебе выделить твои самые лучшие качества, показать твою историю с лучшей стороны и зацепить приемную комиссию.
 • 📋 Создание лучшего списка активностей для твоего факультета, который сделают тебя уникальным абитурентом.""",
             reply_markup=main_menu
@@ -168,6 +167,7 @@ async def premium_handler(message: Message):
         await message.answer(
             f"💸 Оплатите {price}₸ на Kaspi:\n🔢 4400 4303 8721 0856\n"
             f"📝 В комментарии укажите ваш Telegram ID: {message.from_user.id}"
+            f"📝 После подписки нажмите старт"
         )
     except Exception as e:
         logging.error(f"Premium error: {str(e)}")
@@ -195,7 +195,7 @@ async def essay_analysis_start(message: Message, state: FSMContext):
 async def essay_analysis(message: Message, state: FSMContext):
     msg = await message.answer("⏳ Обработка...")
     prompt = f"""Моё эссе: {message.text}
-Проанализируй моё эссе для Common App.
+Проанализируй моё эссе для Common App и уложись в лимит maxOutputTokens: 8192.
 
 Не используй вступительных или конечных сообщений, приступи сразу к делу. Не используй разные виды форматирования (Жирный шрифт и т.п.). Не используй ничего кроме смайликов и сплошного текста, не списки, ничего. ОБЯЗАТЕЛЬНО Разделяй абзацы двумя строками. Используй смайлики для лучшей структуры и понимания текста.
 
@@ -272,7 +272,7 @@ async def essay_write_start(message: Message, state: FSMContext):
 async def essay_write(message: Message, state: FSMContext):
     msg = await message.answer("⏳ Пишу...")
     prompt = f"""Вот вся информация обо мне: {message.text}
-Твоя задача: помочь мне создать самое лучшее эссе для Common App. Если нет специального обозначения, мне нужно написать Personal Statment. 
+Твоя задача: помочь мне создать самое лучшее эссе для Common App. Если нет специального обозначения, мне нужно написать Personal Statment и уложись в лимит maxOutputTokens: 8192. 
 
 Эссе должно получить 100/100 по данным параметрам: 
  • Hook Strength (Сила зацепки) — насколько эссе захватывает внимание читателя.
@@ -348,7 +348,7 @@ Level of recognition (School/Regional/National/International) - уровень �
 async def activity_analysis(message: Message, state: FSMContext):
     msg = await message.answer("⏳ Анализирую...")
     prompt = f"""Вот все мои достижения и активности :  {message.text}
-Проанализируй их, укажи на мои сильные и слабые стороны.
+Проанализируй их, укажи на мои сильные и слабые стороны и уложись в лимит maxOutputTokens: 8192.
 
 Не используй вступительных или конечных сообщений, приступи сразу к делу. Не используй разные виды форматирования (Жирный шрифт и т.п.). Не используй ничего кроме смайликов и сплошного текста, не списки, ничего. ОБЯЗАТЕЛЬНО Разделяй абзацы двумя строками. Используй смайлики для лучшей структуры и понимания текста.
 
@@ -416,8 +416,6 @@ International
 
 @router.message(F.text == "📋 Создание Активностей")
 async def activity_create_start(message: Message, state: FSMContext):
-    if not await is_premium(message.from_user.id):
-        return await message.answer("🚫 Только для премиум пользователей.")
     await message.answer("""💼 Я помогу тебе придумать лучшие активности для твоего портфолио! Для этого напиши мне :
 
  1. Факультет на который планируете поступать
@@ -430,9 +428,9 @@ async def activity_create_start(message: Message, state: FSMContext):
 async def activity_create(message: Message, state: FSMContext):
     msg = await message.answer("⏳ Подбираю...")
     prompt = f"""Вот информация про мою страну проживания, факультет на который планирую поступать и мои предпочтения: {message.text}
-Создай список активностей для моего портфолио в Common App.
+Создай список активностей для моего портфолио в Common App и уложись в лимит maxOutputTokens: 8192.
 
-Активности должны дать мне максимальные шансы для поступления в лучшие университеты. Предпочтение отдается РЕАЛЬНЫМ активностям. Не давай мне абстрактных активностей по типу участие в Олимпиадах, давай название Олимпиады и ссылку на неё.
+Активности должны дать мне максимальные шансы для поступления в лучшие университеты. Предпочтение отдается РЕАЛЬНЫМ активностям. Не давай мне абстрактных активностей по типу участие в Олимпиадах, давай название Олимпиад.
 
 Активности должны выделять меня из толпы, показывать мое влияние на общество, мои лидерские качества и они должны быть связаны с моим факультетом. 
 
@@ -441,7 +439,6 @@ async def activity_create(message: Message, state: FSMContext):
 Формат:
 
 (Смайлик) Название активности 
-Ссылка на сайт (по возможности)
 Описание активности
 Важность/смысл активности 
 
@@ -485,27 +482,10 @@ async def ai_chat(message: Message, state: FSMContext):
         await bot.send_message(chat_id=AI_CHANNEL_ID, text=f"🧠 Вопрос от @{message.from_user.username or message.from_user.id}:\n\n{message.text}")
     await state.clear()
 
-# === FastAPI сервер с Webhook ===
-app = FastAPI()
-
-@app.on_event("startup")
-async def on_startup():
-    await bot.set_webhook(WEBHOOK_URL)
-    logging.info("✅ Webhook установлен.")
-
-@app.post(WEBHOOK_PATH)
-async def telegram_webhook(req: Request):
-    try:
-        data = await req.json()
-        update = Update.model_validate(data)
-        await dp.feed_update(bot, update)
-        return {"ok": True}
-    except Exception as e:
-        logging.error(f"Webhook error: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-@app.get("/")
-async def root():
-    return {"message": "Bot is running"}
-
-handler = Mangum(app)
+# === Точка входа ===
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    asyncio.run(dp.start_polling(bot))
