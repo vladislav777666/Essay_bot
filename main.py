@@ -166,7 +166,7 @@ async def premium_handler(message: Message):
         price = 2000 * (100 - discount) // 100
         await message.answer(
             f"💸 Оплатите {price}₸ на Kaspi:\n🔢 4400 4303 8721 0856\n"
-            f"📝 В комментарии укажите ваш Telegram ID: {message.from_user.id}"
+            f"📝 В комментарии укажите ваш Telegram ID: {message.from_user.id}\n"
             f"📝 После подписки нажмите старт"
         )
     except Exception as e:
@@ -239,18 +239,6 @@ async def essay_analysis(message: Message, state: FSMContext):
 Смайлик Общий совет 2
 (Дай максимальное число советов, НЕ ИСПОЛЬЗУЙ СПИСОК, просто пиши предложения которые начинаются с цифры и точки)
 
-/////
-
-Personal Statement
-
-When I was ten years old, I built my first robot out of cardboard, old wires, and a broken electric toothbrush. It couldn’t walk, talk, or clean the house, but to me, it was alive. That spark of imagination became the foundation for a lifelong passion for technology and innovation.
-
-Throughout high school, I’ve explored every opportunity to turn curiosity into creation. I led my school’s robotics team to the national finals, developed a mobile app to help visually impaired students navigate our campus, and completed online courses in machine learning. But what excites me most is not the technology itself — it's how it can solve real-world problems and empower people.
-
-One defining moment was when I volunteered at a local shelter to teach kids basic programming. Watching their eyes light up as they coded their first animation reminded me of how powerful knowledge can be. It wasn’t about syntax or loops — it was about confidence and potential.
-
-At university, I hope to combine computer science with human-centered design to build tools that matter. I want to be part of a community that challenges me, inspires me, and pushes me to think beyond the screen. Whether through research, collaboration, or late-night hacking, I’m ready to take the next step in my journey — from cardboard robots to real impact.
-
 """
     result = await gemini_query(prompt)
     await bot(DeleteMessage(chat_id=message.chat.id, message_id=msg.message_id))
@@ -307,10 +295,6 @@ async def essay_write(message: Message, state: FSMContext):
 (Тема эссе 1)
 (Эссе 1)
 //Так дай 3 примера эссе на 600-650 слов
-
-/////
-
-Сполошной текст истории из жизни пользователя
 """
     result = await gemini_query(prompt)
     await bot(DeleteMessage(chat_id=message.chat.id, message_id=msg.message_id))
@@ -386,28 +370,6 @@ Honors 1
 ———
 Так для каждой honors
 
-////////
-
-🎯 Extracurriculars
-
-Academics
-
-Повелитель унитазов
-
-Общество любителей унитазов
-
-Охранял унитазы от чужих зоров
-
-9-12
-
-🏆 Honors
-
-Лучший вселенский унитазонатор
-
-10-12
-
-International
-
 """
     result = await gemini_query(prompt)
     await bot(DeleteMessage(chat_id=message.chat.id, message_id=msg.message_id))
@@ -450,12 +412,6 @@ async def activity_create(message: Message, state: FSMContext):
 
 Так-же где-то 15-20 разных активностей 
 
-/////
-
-Finance and Accounting 
-Казахстан
-💼🎯🏆✍️🗽💪👎🎯🎯🎯🏆
-
 """
     result = await gemini_query(prompt)
     await bot(DeleteMessage(chat_id=message.chat.id, message_id=msg.message_id))
@@ -489,4 +445,3 @@ if __name__ == "__main__":
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
     asyncio.run(dp.start_polling(bot))
-
