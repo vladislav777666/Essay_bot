@@ -21,11 +21,11 @@ from supabase import create_client, Client
 from supabase.lib.client_options import ClientOptions
 
 # === 🔐 КОНФИГ ===
-API_TOKEN = '8101812893:AAGUsaM5wXA54az8GpoSBi2T6PWglG1d4VU'
-SUPABASE_URL = "https://wmslejierapwdicnresb.supabase.co"
-SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indtc2xlamllcmFwd2RpY25yZXNiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MTU2NzA3MSwiZXhwIjoyMDY3MTQzMDcxfQ.Zl00tGef-n-F3PZNdnYaugEvbaVL2yXfs-xvIF2nWjU"
-GEMINI_API_KEY = "AIzaSyBeU-4qbh71GbLchWE3-sTGJ72oLJMs7e0"
-AI_CHANNEL_ID = '-1002849785592'
+API_TOKEN = ''
+SUPABASE_URL = ""
+SUPABASE_API_KEY = ""
+GEMINI_API_KEY = ""
+AI_CHANNEL_ID = ''
 
 # === Supabase и Telegram Init ===
 def init_supabase():
@@ -489,3 +489,4 @@ if __name__ == "__main__":
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
     asyncio.run(dp.start_polling(bot))
+
